@@ -13,6 +13,9 @@ public class AppOficina {
     static final int MAX_PEDIDOS = 100;
     static Produto[] produtos;
     static int quantProdutos = 0;
+    static Produto[] produtosPorCodigo;
+    static Produto[] produtosPorDescricao;
+    static Produto[] produtosPorDesconto;
     static String nomeArquivoDados = "produtos.txt";
     static IOrdenador<Produto> ordenador;
 
@@ -78,6 +81,7 @@ public class AppOficina {
         cabecalho();
         System.out.println("1 - Padrão");
         System.out.println("2 - Por código");
+        System.out.println("3 - Por desconto");
         
         return lerNumero("Digite sua opção", Integer.class);
     }
@@ -163,7 +167,7 @@ public class AppOficina {
             case 3 -> ordenador = new SelectionSort<>();
             case 4 -> ordenador = new Mergesort<>();
             case 5 -> ordenador = new Quicksort<>();
-            case 6 -> ordenador = new Heapsort<>();
+            case 6 -> ordenador = new HeapSort<>();
             default -> ordenador = null;
         }
 
@@ -173,7 +177,14 @@ public class AppOficina {
         }
 
         Produto[] copiaProdutos = Arrays.copyOf(produtos, quantProdutos);
-        Comparator<Produto> comparador = Comparator.naturalOrder();
+        
+        int opcaoComparador = exibirMenuComparadores();
+        Comparator<Produto> comparador = switch (opcaoComparador) {
+            case 2 -> new ComparadorPorCodigo();
+            case 3 -> new ComparadorPorPorcentagemDesconto();
+            default -> Comparator.naturalOrder();
+        };
+        
         Produto[] ordenados = ordenador.ordenar(copiaProdutos, comparador);
 
         System.out.println("Produtos ordenados:");
@@ -215,6 +226,18 @@ public class AppOficina {
         
         produtos = carregarProdutos("src/produtos.txt");
         embaralharProdutos();
+
+        // Tarefa 3: Criar três cópias dos dados, ordenadas por critérios diferentes
+        if (produtos != null && quantProdutos > 0) {
+            IOrdenador<Produto> ordenadorInicial = new Quicksort<>(); // Quicksort é eficiente para a carga inicial
+            
+            produtosPorDescricao = ordenadorInicial.ordenar(produtos, Comparator.naturalOrder());
+            produtosPorCodigo = ordenadorInicial.ordenar(produtos, new ComparadorPorCodigo());
+            produtosPorDesconto = ordenadorInicial.ordenar(produtos, new ComparadorPorPorcentagemDesconto());
+            
+            System.out.println("Cópias de dados ordenadas geradas com sucesso.");
+            pausa();
+        }
 
         int opcao = -1;
         
