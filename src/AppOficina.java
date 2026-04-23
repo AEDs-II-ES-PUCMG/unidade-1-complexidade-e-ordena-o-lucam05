@@ -1,258 +1,371 @@
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.Charset;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Scanner;
-
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 
 public class AppOficina {
 
-    static final int MAX_PEDIDOS = 100;
-    static Produto[] produtos;
-    static int quantProdutos = 0;
-    static Produto[] produtosPorCodigo;
-    static Produto[] produtosPorDescricao;
-    static Produto[] produtosPorDesconto;
-    static String nomeArquivoDados = "produtos.txt";
-    static IOrdenador<Produto> ordenador;
-
-    // #region utilidades
+	/** Nome do arquivo de dados. O arquivo deve estar localizado na raiz do projeto */
+    static String nomeArquivoDados;
+    
+    /** Scanner para leitura de dados do teclado */
     static Scanner teclado;
 
+    /** Vetor de produtos cadastrados */
+    static Produto[] produtosCadastrados;
+
+    /** Quantidade de produtos cadastrados atualmente no vetor */
+    static int quantosProdutos = 0;
+
+    /** Vetor de pedidos cadastrados */
+    static Pedido[] pedidosCadastrados;
     
+    /** Vetor de pedidos ordenados pela data do pedido */
+    static Pedido[] pedidosOrdenadosPorData;
 
-    static <T extends Number> T lerNumero(String mensagem, Class<T> classe) {
-        System.out.print(mensagem + ": ");
-        T valor;
-        try {
-            valor = classe.getConstructor(String.class).newInstance(teclado.nextLine());
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
-                | NoSuchMethodException | SecurityException e) {
-            return null;
-        }
-        return valor;
-    }
-
+    /** Vetor de pedidos ordenados pelo valor final (crescente) — usado para busca binária em localizarPedidosPremium */
+    static Pedido[] pedidosOrdenadosPorValor;
+    
+    /** Quantidade de pedidos cadastrados atualmente no vetor */
+    static int quantPedidos = 0;
+    
+    static IOrdenator<Pedido> ordenador;
+    
     static void limparTela() {
         System.out.print("\033[H\033[2J");
         System.out.flush();
     }
 
+    /** Gera um efeito de pausa na CLI. Espera por um enter para continuar */
     static void pausa() {
-        System.out.println("Tecle Enter para continuar.");
+        System.out.println("Digite enter para continuar...");
         teclado.nextLine();
     }
 
+    /** Cabeçalho principal da CLI do sistema */
     static void cabecalho() {
-        limparTela();
-        System.out.println("XULAMBS COMÉRCIO DE COISINHAS v0.2\n================");
+        System.out.println("AEDs II COMÉRCIO DE COISINHAS");
+        System.out.println("=============================");
     }
     
+    static <T extends Number> T lerOpcao(String mensagem, Class<T> classe) {
+        
+    	T valor;
+        
+    	System.out.println(mensagem);
+    	try {
+            valor = classe.getConstructor(String.class).newInstance(teclado.nextLine());
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
+        		| InvocationTargetException | NoSuchMethodException | SecurityException e) {
+            return null;
+        }
+        return valor;
+    }
+    
+    /**
+     * Lê os dados de um arquivo-texto e retorna um vetor de produtos. Arquivo-texto no formato
+     * N  (quantidade de produtos) <br/>
+     * tipo;descrição;preçoDeCusto;margemDeLucro;[dataDeValidade] <br/>
+     * Deve haver uma linha para cada um dos produtos. Retorna um vetor vazio em caso de problemas com o arquivo.
+     * @param nomeArquivoDados Nome do arquivo de dados a ser aberto.
+     * @return Um vetor com os produtos carregados, ou vazio em caso de problemas de leitura.
+     */
+    static Produto[] lerProdutos(String nomeArquivoDados) {
+    	
+    	Scanner arquivo = null;
+    	int numProdutos;
+    	String linha;
+    	Produto produto;
+    	Produto[] produtosCadastrados;
+    	
+    	try {
+    		arquivo = new Scanner(new File(nomeArquivoDados), Charset.forName("UTF-8"));
+    		
+    		numProdutos = Integer.parseInt(arquivo.nextLine());
+    		produtosCadastrados = new Produto[numProdutos];
+    		
+    		for (int i = 0; i < numProdutos; i++) {
+    			linha = arquivo.nextLine();
+    			produto = Produto.criarDoTexto(linha);
+    			produtosCadastrados[i] = produto;
+    		}
+    		quantosProdutos = numProdutos;
+    		
+    	} catch (IOException excecaoArquivo) {
+    		produtosCadastrados = null;
+    	} finally {
+    		arquivo.close();
+    	}
+    	
+    	return produtosCadastrados;
+    }
 
-    static int exibirMenuPrincipal() {
+    /**
+     * Lê os dados de um arquivo-texto e retorna um vetor de pedidos. Arquivo-texto no formato
+     * N  (quantidade de pedidos) <br/>
+     * dataDoPedido;formaDePagamento;descrições dos produtos do pedido <br/>
+     * Deve haver uma linha para cada um dos pedidos. Retorna um vetor vazio em caso de problemas com o arquivo.
+     * @param nomeArquivoDados Nome do arquivo de dados a ser aberto.
+     * @return Um vetor com os pedidos carregados, ou vazio em caso de problemas de leitura.
+     */
+    static Pedido[] lerPedidos(String nomeArquivoDados) {
+    	
+    	Pedido[] pedidosCadastrados;
+    	Scanner arquivo = null;
+    	int numPedidos;
+    	String linha;
+    	Pedido pedido;
+    	
+    	try {
+    		arquivo = new Scanner(new File(nomeArquivoDados), Charset.forName("UTF-8"));
+    		
+    		numPedidos = Integer.parseInt(arquivo.nextLine());
+    		pedidosCadastrados = new Pedido[numPedidos];
+    		
+    		for (int i = 0; i < numPedidos; i++) {
+    			linha = arquivo.nextLine();
+    			pedido = criarPedido(linha);
+    			pedidosCadastrados[i] = pedido;
+    		}
+    		quantPedidos = numPedidos;
+    		
+    	} catch (IOException excecaoArquivo) {
+    		pedidosCadastrados = null;
+    	} finally {
+    		arquivo.close();
+    	}
+    	
+    	return pedidosCadastrados;
+    }
+    
+    private static Pedido criarPedido(String dados) {
+
+    	String[] dadosPedido;
+    	DateTimeFormatter formatoData;
+    	LocalDate dataDoPedido;
+    	int formaDePagamento;
+    	Pedido pedido;
+    	Produto produto;
+
+    	dadosPedido = dados.split(";");
+
+    	formatoData = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    	dataDoPedido = LocalDate.parse(dadosPedido[0], formatoData);
+
+    	formaDePagamento = Integer.parseInt(dadosPedido[1]);
+
+    	pedido = new Pedido(dataDoPedido, formaDePagamento);
+
+    	for (int i = 2; i < dadosPedido.length; i++) {
+    		String campo = dadosPedido[i];
+    		String nomeProduto;
+    		int quantidade;
+
+    		int separador = campo.lastIndexOf(':');
+    		if (separador >= 0) {
+    			nomeProduto = campo.substring(0, separador);
+    			try {
+    				quantidade = Integer.parseInt(campo.substring(separador + 1));
+    			} catch (NumberFormatException e) {
+    				nomeProduto = campo;
+    				quantidade = 1;
+    			}
+    		} else {
+    			nomeProduto = campo;
+    			quantidade = 1;
+    		}
+
+    		produto = pesquisarProduto(nomeProduto);
+    		pedido.incluirProduto(produto, quantidade);
+    	}
+    	return pedido;
+    }
+    
+    /** Localiza um produto no vetor de produtos cadastrados, a partir do nome de produto passado como parâmetro para esse método. 
+     *  A busca não é sensível ao caso.
+     *  @param pesquisado Nome do produto a ser pesquisado no vetor de produtos cadastrados. 
+     *  @return O produto encontrado ou null, caso o produto não tenha sido localizado no vetor de produtos cadastrados.
+     */
+    static Produto pesquisarProduto(String pesquisado) {
+        
+    	Produto produto = null;
+    	Boolean localizado = false;
+    	
+    	for (int i = 0; (i < quantosProdutos && !localizado); i++) {
+        	if (produtosCadastrados[i].descricao.equals(pesquisado)) {
+        		produto = produtosCadastrados[i];
+        		localizado = true;
+        	}
+        }
+        
+        if (!localizado) {
+        	return null;
+        } else {
+        	return(produto);
+        }     
+    }
+    
+    /** Imprime o menu principal, lê a opção do usuário e a retorna (int).
+     * @return Um inteiro com a opção do usuário.
+    */
+    static int menu() {
         cabecalho();
-        System.out.println("1 - Procurar produto");
-        System.out.println("2 - Filtrar produtos por preço máximo");
-        System.out.println("3 - Ordenar produtos");
-        System.out.println("4 - Embaralhar produtos");
-        System.out.println("5 - Listar produtos");
+        System.out.println("1 - Ordenar pedidos");
+        System.out.println("2 - Embaralhar pedidos");
+        System.out.println("3 - Listar todos os pedidos");
+        System.out.println("4 - Localizar pedidos premium (por valor de corte)");
         System.out.println("0 - Finalizar");
+        
+        return lerOpcao("Digite sua opção: ", Integer.class);
+    }
+    
+    
+    /**
+     * Localiza e exibe todos os pedidos cujo valor final seja maior ou igual a um valor de corte
+     * informado pelo usuário.
+     *
+     * Estratégia otimizada: o vetor pedidosOrdenadosPorValor é mantido ordenado de forma crescente
+     * pelo valor final (ComparadorCriterioA). Uma busca binária identifica o primeiro índice cujo
+     * valorFinal() >= valorCorte em O(log n), evitando varredura completa do vetor. Os pedidos
+     * elegíveis — todos a partir desse índice — são impressos em O(k), onde k é o número de
+     * resultados encontrados, sem recalcular valores abaixo do corte.
+     */
+    static void localizarPedidosPremium(Pedido pedido) {
+
+        cabecalho();
+        Double valorCorte = lerOpcao("Informe o valor de corte (R$): ", Double.class);
+        Scanner arquivo = null;
+        int numPedidos = Integer.parseInt(arquivo.nextLine());
        
-        return lerNumero("Digite sua opção", Integer.class);
+        if (valorCorte == null) {
+            System.out.println("Valor inválido!");
+            return;
+        }
+        for (int i = 0; i < numPedidos; i++) {
+    		if(pedidosCadastrados.length==valorCorte){
+                System.out.print(pedidosCadastrados[i]);
+            }	
+    		}
+       
     }
 
     static int exibirMenuOrdenadores() {
         cabecalho();
         System.out.println("1 - Bolha");
-        System.out.println("2 - Inserção");
-        System.out.println("3 - Seleção");
-        System.out.println("4 - Mergesort");
-        System.out.println("5 - Quicksort");
-        System.out.println("6 - Heapsort");
+        System.out.println("2 - Inserção"); 
+        System.out.println("3 - Seleção"); 
+        System.out.println("4 - Mergesort"); 
+        System.out.println("5 - Heapsort"); 
         System.out.println("0 - Finalizar");
        
-        return lerNumero("Digite sua opção", Integer.class);
+        return lerOpcao("Digite sua opção: ", Integer.class);
     }
-
+    
     static int exibirMenuComparadores() {
         cabecalho();
-        System.out.println("1 - Padrão");
-        System.out.println("2 - Por código");
-        System.out.println("3 - Por desconto");
-        
-        return lerNumero("Digite sua opção", Integer.class);
+        System.out.println("1 - Critério A: Valor Final do Pedido");
+        System.out.println("2 - Critério B: Volume Total de Itens");
+        System.out.println("3 - Critério C: Índice de Economia (Decrescente)");
+
+        return lerOpcao("Digite sua opção: ", Integer.class);
     }
+    
+    /** Ordena o vetor de pedidos cadastrados empregando um método de ordenação selecionado pelo
+     *  usuário, dentre os seguintes: bolha, seleção, inserção, mergesort e heapsort.
+     *  O usuário também escolhe um critério de ordenação: A (Valor Final), B (Volume de Itens)
+     *  ou C (Índice de Economia, decrescente).
+     *  O método interage com o usuário por meio de menus e aplica
+     *  a ordenação escolhida. Ao final, exibe o tempo total gasto no processo de ordenação, em ms.
+    */
+    static void ordenarPedidos(){
 
-    // #endregion
-    static Produto[] carregarProdutos(String nomeArquivo){
-        Scanner dados;
-        Produto[] dadosCarregados;
-        quantProdutos = 0;
-        try{
-            dados = new Scanner(new File(nomeArquivo));
-            int tamanho = Integer.parseInt(dados.nextLine());
-            
-            dadosCarregados = new Produto[tamanho];
-            while (dados.hasNextLine()) {
-                Produto novoProduto = Produto.criarDoTexto(dados.nextLine());
-                dadosCarregados[quantProdutos++] = novoProduto;
-            }
-            dados.close();
-        }catch (FileNotFoundException fex){
-            System.out.println("Arquivo não encontrado: " + nomeArquivo);
-            dadosCarregados = null;
-        }
-        return dadosCarregados;
-    }
-
-
-    static Produto localizarProduto() {
-        if (produtos == null || quantProdutos == 0) {
-            System.out.println("Nenhum produto carregado.");
-            return null;
-        }
-        cabecalho();
-        System.out.println("Localizando um produto");
-        int numero = lerNumero("Digite o identificador do produto", Integer.class);
-        Produto localizado = null;
-        
-        for (int i = 0; i < quantProdutos && localizado == null; i++) {
-            if (produtos[i].hashCode() == numero)
-                localizado = produtos[i];
-        }
-        return localizado;
-    }
-
-    private static void mostrarProduto(Produto produto) {
-        cabecalho();
-        String mensagem = "Dados inválidos";
-        
-        if(produto!=null){
-            mensagem = String.format("Dados do produto:\n%s", produto);            
-        }
-        
-        System.out.println(mensagem);
-    }
-
-    private static void filtrarPorPrecoMaximo(){
-        if (produtos == null || quantProdutos == 0) {
-            System.out.println("Nenhum produto carregado.");
-            return;
-        }
-        cabecalho();
-        System.out.println("Filtrando por valor máximo:");
-        double valor = lerNumero("valor", Double.class);
-        StringBuilder relatorio = new StringBuilder();
-        for (int i = 0; i < quantProdutos; i++) {
-            if(produtos[i].valorDeVenda() < valor)
-                relatorio.append(produtos[i]+"\n");
-        }
-        System.out.println(relatorio.toString());
-    }
-
-    static void ordenarProdutos(){
-        if (produtos == null || quantProdutos == 0) {
-            System.out.println("Nenhum produto carregado para ordenar.");
-            return;
-        }
-
-        cabecalho();
         int opcao = exibirMenuOrdenadores();
         switch (opcao) {
-            case 1 -> ordenador = new Bubblesort<>();
+            case 1 -> ordenador = new BubbleSort<>();
             case 2 -> ordenador = new InsertSort<>();
             case 3 -> ordenador = new SelectionSort<>();
             case 4 -> ordenador = new Mergesort<>();
-            case 5 -> ordenador = new Quicksort<>();
-            case 6 -> ordenador = new HeapSort<>();
-            default -> ordenador = null;
+            case 5 -> ordenador = new HeapSort<>();
         }
 
-        if (ordenador == null) {
-            System.out.println("Operação de ordenação cancelada.");
-            return;
+        if (ordenador != null) {
+            opcao = exibirMenuComparadores();
+            switch (opcao) {
+                case 1:
+                    ordenador.setComparador(new ComparadorValorfinaldoPedido());
+                    pedidosCadastrados = ordenador.ordenar(pedidosCadastrados);
+                    break;
+                case 2:
+                    ordenador.setComparador(new ComparadorFormadePagamento());
+                    pedidosCadastrados = ordenador.ordenar(pedidosCadastrados);
+                    break;
+                case 3:
+                    ordenador.setComparador(new ComparadorCriterioC());
+                    pedidosCadastrados = ordenador.ordenar(pedidosCadastrados);
+                    break;
+                default:
+                    pedidosCadastrados = ordenador.ordenar(pedidosCadastrados);
+            }
+
+            System.out.println("Tempo gasto com a ordenação dos pedidos: " + ordenador.getTempoOrdenacao() + " ms.");
         }
-
-        Produto[] copiaProdutos = Arrays.copyOf(produtos, quantProdutos);
-        
-        int opcaoComparador = exibirMenuComparadores();
-        Comparator<Produto> comparador = switch (opcaoComparador) {
-            case 2 -> new ComparadorPorCodigo();
-            case 3 -> new ComparadorPorPorcentagemDesconto();
-            default -> Comparator.naturalOrder();
-        };
-        
-        Produto[] ordenados = ordenador.ordenar(copiaProdutos, comparador);
-
-        System.out.println("Produtos ordenados:");
-        for (Produto produto : ordenados) {
-            System.out.println(produto);
-        }
-
-        verificarSubstituicao(produtos, ordenados);
+        ordenador = null;
     }
 
-    static void embaralharProdutos(){
-        if (produtos == null) {
-            return;
-        }
-        Collections.shuffle(Arrays.asList(produtos));
+    static void embaralharPedidos(){
+        Collections.shuffle(Arrays.asList(pedidosCadastrados));
     }
 
-    static void verificarSubstituicao(Produto[] dadosOriginais, Produto[] copiaDados){
+    /** Lista todos os pedidos cadastrados, numerados, um por linha */
+    static void listarTodosOsPedidos() {
+    	
         cabecalho();
-        System.out.print("Deseja sobrescrever os dados originais pelos ordenados (S/N)?");
-        String resposta = teclado.nextLine().toUpperCase();
-        if(resposta.equals("S"))
-            produtos = Arrays.copyOf(copiaDados, copiaDados.length);
-    }
-
-    static void listarProdutos(){
-        if (produtos == null || quantProdutos == 0) {
-            System.out.println("Nenhum produto carregado.");
-            return;
-        }
-        cabecalho();
-        for (int i = 0; i < quantProdutos; i++) {
-            System.out.println(produtos[i]);
+        System.out.println("\nPedidos cadastrados: ");
+        for (int i = 0; i < quantPedidos; i++) {
+        	System.out.println(String.format("%02d - %s\n", (i + 1), pedidosCadastrados[i].toString()));
         }
     }
-
+    
     public static void main(String[] args) {
-        teclado = new Scanner(System.in);
+		
+    	teclado = new Scanner(System.in, Charset.forName("UTF-8"));
         
-        produtos = carregarProdutos("src/produtos.txt");
-        embaralharProdutos();
+    	nomeArquivoDados = "produtos.txt";
+        produtosCadastrados = lerProdutos(nomeArquivoDados);
+       
+        String nomeArquivoPedidos = "pedidos.txt";
+        pedidosCadastrados = lerPedidos(nomeArquivoPedidos);
+        
+        ComparadorPorData comparadorPorData = new ComparadorPorData();
+        ordenador = new HeapSort<>();
+        ordenador.setComparador(comparadorPorData);
+        pedidosOrdenadosPorData = ordenador.ordenar(pedidosCadastrados);
 
-        // Tarefa 3: Criar três cópias dos dados, ordenadas por critérios diferentes
-        if (produtos != null && quantProdutos > 0) {
-            IOrdenador<Produto> ordenadorInicial = new Quicksort<>(); // Quicksort é eficiente para a carga inicial
-            
-            produtosPorDescricao = ordenadorInicial.ordenar(produtos, Comparator.naturalOrder());
-            produtosPorCodigo = ordenadorInicial.ordenar(produtos, new ComparadorPorCodigo());
-            produtosPorDesconto = ordenadorInicial.ordenar(produtos, new ComparadorPorPorcentagemDesconto());
-            
-            System.out.println("Cópias de dados ordenadas geradas com sucesso.");
-            pausa();
-        }
+        // Cria cópia independente ordenada por valorFinal() (crescente) para busca binária em localizarPedidosPremium
+        pedidosOrdenadosPorValor = Arrays.copyOf(pedidosCadastrados, quantPedidos);
+        IOrdenator<Pedido> ordenadorValor = new HeapSort<>();
+        ordenadorValor.setComparador(new ComparadorValorfinaldoPedido());
+        pedidosOrdenadosPorValor = ordenadorValor.ordenar(pedidosOrdenadosPorValor);
 
         int opcao = -1;
-        
-        do {
-            opcao = exibirMenuPrincipal();
+      
+        do{
+        	opcao = menu();
             switch (opcao) {
-                case 1 -> mostrarProduto(localizarProduto());
-                case 2 -> filtrarPorPrecoMaximo();
-                case 3 -> ordenarProdutos();
-                case 4 -> embaralharProdutos();
-                case 5 -> listarProdutos();
+                case 1 -> ordenarPedidos();
+                case 2 -> embaralharPedidos();
+                case 3 -> listarTodosOsPedidos();
+                case 4 -> localizarPedidosPremium(null);
                 case 0 -> System.out.println("FLW VLW OBG VLT SMP.");
             }
             pausa();
-        }while (opcao != 0);
-        teclado.close();
-    }                        
+        } while (opcao != 0);       
+
+        teclado.close();    
+    }
 }
